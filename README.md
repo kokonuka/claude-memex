@@ -31,8 +31,7 @@ npm install -g claude-memex
   "mcpServers": {
     "claude-memex": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["claude-memex"]
+      "command": "claude-memex"
     }
   }
 }
@@ -50,7 +49,7 @@ npm install -g claude-memex
         "hooks": [
           {
             "type": "command",
-            "command": "npx claude-memex-hook"
+            "command": "claude-memex-hook"
           }
         ]
       }
