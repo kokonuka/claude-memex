@@ -24,38 +24,29 @@ npm install -g claude-memex
 
 ### 2. MCP登録
 
-`~/.claude.json` の `mcpServers` に追加:
+MCPサーバーとして登録します。スコープは環境に合わせて変更してください。
 
-```json
-{
-  "mcpServers": {
-    "claude-memex": {
-      "type": "stdio",
-      "command": "claude-memex"
-    }
-  }
-}
+```bash
+# 例: 全プロジェクト共通で使う場合
+claude mcp add-json claude-memex '{"type":"stdio","command":"claude-memex"}' --scope user
 ```
 
 ### 3. Hook登録
 
-`~/.claude/settings.json` の `hooks` に追加:
+SessionEndフックを登録します。設定ファイルやスコープは環境に合わせてください。
 
-```json
-{
-  "hooks": {
-    "SessionEnd": [
+```bash
+# 例: ~/.claude/settings.json に追加する場合
+"SessionEnd": [
+  {
+    "hooks": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-memex-hook"
-          }
-        ]
+        "type": "command",
+        "command": "claude-memex-hook"
       }
     ]
   }
-}
+]
 ```
 
 ### 4. 会社名の設定（任意）
