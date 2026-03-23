@@ -1,4 +1,9 @@
-import { pipeline } from "@huggingface/transformers";
+import { pipeline, env } from "@huggingface/transformers";
+import { join } from "path";
+import { homedir } from "os";
+
+// モデルキャッシュを ~/.claude-memex/models/ に固定（npm global install対策）
+env.cacheDir = join(homedir(), ".claude-memex", "models");
 
 const MODEL_NAME = "mochiya98/ruri-v3-310m-onnx";
 
