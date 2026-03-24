@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 
 export interface Chunk {
-  text: string;
+  body: string;
   sessionId: string;
   projectPath: string;
   timestamp: string;
@@ -34,7 +34,7 @@ export function parseTranscript(transcriptPath: string): Chunk[] {
     .filter((line) => line.trim());
 
   const chunks: Chunk[] = [];
-  let currentQuestion: string | null = null;
+  let currentUserMessage: string | null = null;
   let sessionId = "";
   let projectPath = "";
   let lastTimestamp = "";
@@ -52,15 +52,15 @@ export function parseTranscript(transcriptPath: string): Chunk[] {
     if (entry.timestamp) lastTimestamp = entry.timestamp;
 
     if (entry.type === "user" && entry.message?.role === "user") {
-      currentQuestion = extractText(entry.message.content);
+      currentUserMessage = extractText(entry.message.content);
     }
 
     if (entry.type === "assistant" && entry.message?.role === "assistant") {
-      const answer = extractText(entry.message.content);
-      if (currentQuestion && answer) {
-        const text = `Q: ${currentQuestion}\nA: ${answer}`;
-        chunks.push({ text, sessionId, projectPath, timestamp: lastTimestamp });
-        currentQuestion = null;
+      const assistantMessage = extractText(entry.message.content);
+      if (currentUserMessage && assistantMessage) {
+        const body = `ユーザー: ${currentUserMessage}\nアシスタント: ${assistantMessage}`;
+        chunks.push({ body, sessionId, projectPath, timestamp: lastTimestamp });
+        currentUserMessage = null;
       }
     }
   }

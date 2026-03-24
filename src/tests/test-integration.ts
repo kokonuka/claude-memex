@@ -23,14 +23,19 @@ async function main() {
 
   // 2. ベクトル化テスト
   console.log("\n[2] ベクトル化テスト (Ruri v3)...");
-  const testTexts = [
-    "Q: TypeScriptのジェネリクスとは何ですか？\nA: 型をパラメータとして渡せる仕組みです。",
-    "Q: ReactのuseStateフックの使い方は？\nA: const [state, setState] = useState(初期値) で状態管理できます。",
-    "Q: SQLiteのFTS5とは何ですか？\nA: SQLiteに組み込まれた全文検索エンジンです。",
+  const testSummaries = [
+    "TypeScriptのジェネリクスについて。型をパラメータとして渡せる仕組み。",
+    "ReactのuseStateフックの使い方。状態管理の基本。",
+    "SQLiteのFTS5について。組み込み全文検索エンジン。",
+  ];
+  const testBodies = [
+    "TypeScriptのジェネリクスとは何ですか？型をパラメータとして渡せる仕組みです。",
+    "ReactのuseStateフックの使い方は？const [state, setState] = useState(初期値) で状態管理できます。",
+    "SQLiteのFTS5とは何ですか？SQLiteに組み込まれた全文検索エンジンです。",
   ];
 
   const startEmbed = Date.now();
-  const vectors = await embedTexts(testTexts);
+  const vectors = await embedTexts(testSummaries);
   const embedTime = Date.now() - startEmbed;
   console.log(`  → ${vectors.length}件ベクトル化完了 (${embedTime}ms)`);
   console.log(
@@ -40,8 +45,8 @@ async function main() {
   // 3. DB保存テスト
   console.log("\n[3] DB保存テスト...");
   const insertMemory = db.prepare(`
-    INSERT INTO memories (text, company_name, project_path, session_id, timestamp)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO memories (summary, body, company_name, project_path, session_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
   const insertVec = db.prepare(`
     INSERT INTO memories_vec (memory_id, embedding)
@@ -49,9 +54,10 @@ async function main() {
   `);
 
   const insertAll = db.transaction(() => {
-    for (let i = 0; i < testTexts.length; i++) {
+    for (let i = 0; i < testSummaries.length; i++) {
       const result = insertMemory.run(
-        testTexts[i],
+        testSummaries[i],
+        testBodies[i],
         "テスト株式会社",
         "/test/project",
         "test-session-001",
@@ -84,7 +90,7 @@ async function main() {
     const searchTime = Date.now() - startSearch;
     console.log(`\n  クエリ: "${q}" (${searchTime}ms)`);
     for (const r of results) {
-      console.log(`    [score: ${r.score.toFixed(4)}] ${r.text.substring(0, 60)}...`);
+      console.log(`    [score: ${r.score.toFixed(4)}] ${r.summary.substring(0, 60)}...`);
     }
   }
 

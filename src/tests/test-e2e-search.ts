@@ -18,7 +18,7 @@ async function main() {
   // 最初の数件のプレビュー
   const previews = db
     .prepare(
-      "SELECT id, substr(text, 1, 100) as preview FROM memories LIMIT 3"
+      "SELECT id, substr(summary, 1, 100) as preview FROM memories LIMIT 3"
     )
     .all() as Array<{ id: number; preview: string }>;
   for (const p of previews) {
@@ -38,7 +38,7 @@ async function main() {
     console.log(`  → ${results.length}件ヒット (${elapsed}ms)`);
     for (const r of results) {
       console.log(
-        `  [score: ${r.score.toFixed(4)}] ${r.text.substring(0, 80)}...`
+        `  [score: ${r.score.toFixed(4)}] ${r.summary.substring(0, 80)}...`
       );
     }
   }

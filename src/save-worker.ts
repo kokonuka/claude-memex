@@ -1,15 +1,33 @@
 import { parseTranscript } from "./chunker.js";
 import { getDatabase } from "./database.js";
 import { embedTexts } from "./embedder.js";
+import { summarizeTexts } from "./summarizer.js";
 import { resolve } from "path";
-import { readFileSync, existsSync } from "fs";
+import { existsSync } from "fs";
 import { config } from "dotenv";
+import { exec } from "child_process";
+import { homedir } from "os";
+import { join } from "path";
+
+function notify(message: string): void {
+  if (process.platform === "darwin") {
+    exec(
+      `osascript -e 'display notification "${message}" with title "claude-memex"'`
+    );
+  }
+}
 
 async function main() {
   const [transcriptPath, sessionId, cwd] = process.argv.slice(2);
 
   if (!transcriptPath || !existsSync(transcriptPath)) {
     process.exit(1);
+  }
+
+  // グローバル設定ファイルからAPIキーを読み取る
+  const globalEnvPath = join(homedir(), ".claude-memex", ".env");
+  if (existsSync(globalEnvPath)) {
+    config({ path: globalEnvPath });
   }
 
   // プロジェクトの.envからCOMPANY_NAMEを読み取る
@@ -25,15 +43,18 @@ async function main() {
     process.exit(0);
   }
 
-  // 2. ベクトル化
-  const texts = chunks.map((c) => c.text);
-  const vectors = await embedTexts(texts);
+  // 2. 要約生成（Gemini API）
+  const bodies = chunks.map((c) => c.body);
+  const summaries = await summarizeTexts(bodies);
 
-  // 3. DB保存（memoriesテーブル + memories_vecテーブル）
+  // 3. ベクトル化（summaryのみ）
+  const vectors = await embedTexts(summaries);
+
+  // 4. DB保存（memoriesテーブル + memories_vecテーブル）
   const db = getDatabase();
   const insertMemory = db.prepare(`
-    INSERT INTO memories (text, company_name, project_path, session_id, timestamp)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO memories (summary, body, company_name, project_path, session_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
   const insertVec = db.prepare(`
     INSERT INTO memories_vec (memory_id, embedding)
@@ -43,7 +64,8 @@ async function main() {
   const insertAll = db.transaction(() => {
     for (let i = 0; i < chunks.length; i++) {
       const result = insertMemory.run(
-        chunks[i].text,
+        summaries[i],
+        chunks[i].body,
         companyName,
         chunks[i].projectPath,
         chunks[i].sessionId,
@@ -55,9 +77,12 @@ async function main() {
 
   insertAll();
   db.close();
+
+  notify(`${chunks.length}件の記憶を保存しました`);
 }
 
 main().catch((err) => {
+  notify("記憶の保存に失敗しました");
   console.error("save-worker error:", err);
   process.exit(1);
 });

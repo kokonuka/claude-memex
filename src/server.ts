@@ -50,7 +50,7 @@ server.tool(
     const text = results
       .map(
         (r, i) =>
-          `[${i + 1}] (score: ${r.score.toFixed(4)}, ${r.timestamp})\nProject: ${r.projectPath}\nCompany: ${r.companyName}\n${r.text}`
+          `[${i + 1}] (score: ${r.score.toFixed(4)}, ${r.timestamp})\nProject: ${r.projectPath}\nCompany: ${r.companyName}\n概要: ${r.summary}\n本文: ${r.body}`
       )
       .join("\n\n---\n\n");
 

@@ -15,11 +15,12 @@ export function getDatabase(): Database.Database {
   const db = new Database(DB_PATH);
   sqliteVec.load(db);
 
-  // メインテーブル（テキスト・メタデータ保存用）
+  // メインテーブル（要約・本文・メタデータ保存用）
   db.exec(`
     CREATE TABLE IF NOT EXISTS memories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      text TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      body TEXT NOT NULL,
       company_name TEXT DEFAULT '',
       project_path TEXT DEFAULT '',
       session_id TEXT DEFAULT '',
@@ -27,16 +28,18 @@ export function getDatabase(): Database.Database {
     )
   `);
 
-  // FTS5全文検索用テーブル
+  // FTS5全文検索用テーブル（summary + body の両方を検索対象）
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-      text,
+      summary,
+      body,
       content='memories',
       content_rowid='id'
     )
   `);
 
   // sqlite-vec ベクトル検索用テーブル（Ruri v3 310M: 768次元）
+  // summaryのembeddingのみ保存
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
       memory_id integer primary key,
@@ -47,13 +50,13 @@ export function getDatabase(): Database.Database {
   // FTS5をメインテーブルと同期するトリガー
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-      INSERT INTO memories_fts(rowid, text) VALUES (new.id, new.text);
+      INSERT INTO memories_fts(rowid, summary, body) VALUES (new.id, new.summary, new.body);
     END
   `);
 
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-      INSERT INTO memories_fts(memories_fts, rowid, text) VALUES('delete', old.id, old.text);
+      INSERT INTO memories_fts(memories_fts, rowid, summary, body) VALUES('delete', old.id, old.summary, old.body);
     END
   `);
 

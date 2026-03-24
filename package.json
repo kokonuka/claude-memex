@@ -4,7 +4,8 @@
   "type": "module",
   "bin": {
     "claude-memex": "./dist/server.js",
-    "claude-memex-hook": "./dist/hook-entry.js"
+    "claude-memex-hook": "./dist/hook-entry.js",
+    "claude-memex-setup": "./dist/setup.js"
   },
   "files": [
     "dist/*.js",
@@ -16,7 +17,12 @@
     "start": "node dist/server.js",
     "hook": "node dist/hook-entry.js"
   },
-  "keywords": ["claude-code", "mcp", "memory", "long-term-memory"],
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "memory",
+    "long-term-memory"
+  ],
   "author": "kokonuka",
   "license": "ISC",
   "description": "Long-term memory for Claude Code via MCP",
@@ -27,6 +33,7 @@
     "typescript": "^6.0.2"
   },
   "dependencies": {
+    "@google/genai": "^1.46.0",
     "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^12.8.0",

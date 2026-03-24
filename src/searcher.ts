@@ -3,7 +3,8 @@ import { embedQuery } from "./embedder.js";
 
 interface SearchResult {
   id: number;
-  text: string;
+  summary: string;
+  body: string;
   companyName: string;
   projectPath: string;
   sessionId: string;
@@ -45,7 +46,7 @@ export async function searchMemories(
   const limit = options?.limit ?? 10;
   const db = getDatabase();
 
-  // 1. キーワード検索 (FTS5)
+  // 1. キーワード検索 (FTS5: summary + body の両方を検索)
   let ftsQuery = `SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?`;
   const ftsResults = db.prepare(ftsQuery).all(query, limit * 2) as Array<{
     rowid: number;
@@ -55,7 +56,7 @@ export async function searchMemories(
   const keywordRanks = new Map<number, number>();
   ftsResults.forEach((row, i) => keywordRanks.set(row.rowid, i + 1));
 
-  // 2. ベクトル検索 (sqlite-vec の vec0 仮想テーブル)
+  // 2. ベクトル検索 (sqlite-vec: summaryのembeddingと比較)
   const queryVector = await embedQuery(query);
   const vecResults = db
     .prepare(
@@ -85,12 +86,13 @@ export async function searchMemories(
   const placeholders = allIds.map(() => "?").join(",");
   const rows = db
     .prepare(
-      `SELECT id, text, company_name, project_path, session_id, timestamp
+      `SELECT id, summary, body, company_name, project_path, session_id, timestamp
        FROM memories WHERE id IN (${placeholders})`
     )
     .all(...allIds) as Array<{
     id: number;
-    text: string;
+    summary: string;
+    body: string;
     company_name: string;
     project_path: string;
     session_id: string;
@@ -101,7 +103,8 @@ export async function searchMemories(
   const results: SearchResult[] = rows
     .map((row) => ({
       id: row.id,
-      text: row.text,
+      summary: row.summary,
+      body: row.body,
       companyName: row.company_name,
       projectPath: row.project_path,
       sessionId: row.session_id,
