@@ -2,76 +2,52 @@
 
 Claude Code用の長期記憶ツール。セッション終了時に会話を自動保存し、過去の記憶をMCP経由で検索できる。
 
-## 仕組み
-
-```
-セッション終了 → Hook発火 → JSONL読込 → チャンク分割 → Gemini APIで要約生成 → Ruri v3でベクトル化 → SQLite保存
-                                                                                                              ↓
-セッション開始 → Claude Codeが質問 → MCP経由で検索 → FTS5 + ベクトル + RRF → 関連記憶を返す
-```
-
-- **要約生成**: Gemini API（Flash-Lite、無料枠で利用可能）
-- **ベクトル化**: Ruri v3（日本語特化、768次元、ローカル実行・トークン消費ゼロ）
-- **検索**: キーワード検索(FTS5) + ベクトル検索(sqlite-vec) + RRF統合 + 時間減衰(半減期30日)
-- **保存先**: `~/.claude-memex/memory.db`（1ファイル、プロジェクト横断検索可能）
-
-### チャンク構造
-
-各記憶は **summary（要約）** と **body（本文）** の2つで構成されます。
-
-- **summary**: Gemini APIが生成した1〜2文の要約。ベクトル検索のアンカーとして機能
-- **body**: 会話の実テキスト。FTS5キーワード検索と結果表示用
-
-summaryだけをベクトル化することで、検索クエリとのマッチ精度を高めています。
-
 ## セットアップ
 
 ### 1. インストール
+
+npmでグローバルにインストールします。これにより `claude-memex`、`claude-memex-hook`、`claude-memex setup` の3つのコマンドが使えるようになります。
 
 ```bash
 npm install -g claude-memex
 ```
 
-### 2. APIキー設定
+### 2. Gemini APIキーの設定
 
-Gemini APIキー（要約生成用）を設定します。ブラウザが自動で開くので、キーを取得して貼り付けてください。
+会話の要約生成に Gemini API（Flash-Lite）を使います。有料プラン（従量課金）の Gemini APIキーを用意してください（無料枠は1日20リクエストの制限があり、通常利用で上限に達します）。
+
+以下のコマンドでAPIキーを登録します。
 
 ```bash
-claude-memex-setup
+claude-memex setup
 ```
 
 ### 3. MCP登録
 
-MCPサーバーとして登録します。スコープは環境に合わせて変更してください。
+Claude Code が過去の記憶を検索できるように、MCPサーバーとして登録します。スコープや設定ファイルは環境に合わせてください。
 
 ```bash
-# 例: 全プロジェクト共通で使う場合
+# 例
 claude mcp add-json claude-memex '{"type":"stdio","command":"claude-memex"}' --scope user
 ```
 
 ### 4. Hook登録
 
-SessionEndフックを登録します。設定ファイルやスコープは環境に合わせてください。
+セッション終了時に会話を自動保存するために、Claude Code の SessionEnd Hook を登録します。スコープや設定ファイルは環境に合わせてください。
 
-```bash
-# 例: ~/.claude/settings.json に追加する場合
+```json
+// 例: ~/.claude/settings.json
 "SessionEnd": [
   {
-    "hooks": [
-      {
-        "type": "command",
-        "command": "claude-memex-hook"
-      }
-    ]
+    "type": "command",
+    "command": "claude-memex-hook"
   }
 ]
 ```
 
 ### 5. 会社名の設定（任意）
 
-記憶に会社名を付与しておくことで、検索時に `company_name` パラメータで絞り込みが可能になります。複数社の案件を並行して扱う場合に、関係ない記憶が混ざるのを防げます。
-
-各プロジェクトのルートに `.env` を作成:
+複数社の案件を並行して扱う場合、記憶に会社名を付与しておくと検索時に絞り込めます。各プロジェクトのルートに `.env` を作成してください。
 
 ```
 COMPANY_NAME=あなたの会社名
@@ -79,13 +55,15 @@ COMPANY_NAME=あなたの会社名
 
 ### 6. CLAUDE.md への記述（推奨）
 
-MCPツールを登録しただけでは、Claude Codeが自発的にclaude-memexを使うとは限りません。`CLAUDE.md`（グローバルまたはプロジェクト）に以下のような指示を追記しておくと、過去の記憶を積極的に参照するようになります。
+MCPツールを登録しただけでは、Claude Code が自発的に過去の記憶を検索するとは限りません。`~/.claude/CLAUDE.md`（グローバル）に以下の指示を追記しておくと、積極的に参照するようになります。
 
 ```
 過去の会話や以前の決定事項に関連しそうな場合は、まずmcp（claude-memex）で検索すること
 ```
 
-これにより、「前に話した○○」「以前決めた方針」といった場面で、過去のセッションから情報を引き出してくれるようになります。
+### 初回実行時の注意
+
+初回のセッション終了時に、Ruri v3モデル（約1.2GB）の自動ダウンロードが発生するため時間がかかります。2回目以降はキャッシュされます。
 
 ## MCPツール
 
@@ -100,6 +78,36 @@ MCPツールを登録しただけでは、Claude Codeが自発的にclaude-memex
 | company_name | string | - | 会社名で絞り込み |
 | limit | number | - | 最大件数（デフォルト: 10） |
 
+## データ確認
+
+保存されたデータを確認するコマンド:
+
+```bash
+sqlite3 -header -column ~/.claude-memex/memory.db "SELECT id, substr(summary, 1, 50) AS summary, substr(body, 1, 50) AS body, timestamp FROM memories ORDER BY id DESC LIMIT 10;"
+```
+
+## 仕組み
+
+```
+セッション終了 → Hook発火 → JSONL読込 → チャンク分割 → Gemini APIで要約生成 → Ruri v3でベクトル化 → SQLite保存
+                                                                                                              ↓
+セッション開始 → Claude Codeが質問 → MCP経由で検索 → FTS5 + ベクトル + RRF → 関連記憶を返す
+```
+
+- **要約生成**: Gemini API（Flash-Lite）
+- **ベクトル化**: Ruri v3（日本語特化、768次元、ローカル実行・トークン消費ゼロ）
+- **検索**: キーワード検索(FTS5) + ベクトル検索(sqlite-vec) + RRF統合 + 時間減衰(半減期30日)
+- **保存先**: `~/.claude-memex/memory.db`（1ファイル、プロジェクト横断検索可能）
+
+### チャンク構造
+
+各記憶は **summary（要約）** と **body（本文）** の2つで構成されます。
+
+- **summary**: Gemini APIが生成した1〜2文の要約。ベクトル検索のアンカーとして機能
+- **body**: 会話の実テキスト。FTS5キーワード検索と結果表示用
+
+summaryだけをベクトル化することで、検索クエリとのマッチ精度を高めています。
+
 ## 技術スタック
 
 | 技術 | 用途 |
@@ -111,12 +119,16 @@ MCPツールを登録しただけでは、Claude Codeが自発的にclaude-memex
 | FTS5 | 全文検索 |
 | MCP SDK | Claude Codeとの連携 |
 
-## 動作確認
+## v1.x からのアップデート
 
-保存されたデータを確認するコマンド:
+v2.0 ではDBスキーマが変更されました（`text` カラム → `summary` + `body` カラム）。アップデート後、次回のDB接続時に自動でマイグレーションされます。既存データの `text` は `body` に移行され、`summary` は空になります（新規保存分から要約が生成されます）。
+
+## データのリセット
+
+記憶データをすべて削除してリセットするには、データベースファイルを削除します。次回のセッション終了時に自動で再作成されます。
 
 ```bash
-sqlite3 -header -column ~/.claude-memex/memory.db "SELECT id, substr(summary, 1, 50) AS summary, substr(body, 1, 50) AS body, timestamp FROM memories ORDER BY id DESC LIMIT 10;"
+rm ~/.claude-memex/memory.db
 ```
 
 ## トラブルシューティング
@@ -132,25 +144,3 @@ cat ~/.claude-memex/error.log
 ```bash
 tail -5 ~/.claude-memex/error.log
 ```
-
-## データのリセット
-
-記憶データをすべて削除してリセットするには、データベースファイルを削除します。次回のセッション終了時に自動で再作成されます。
-
-```bash
-rm ~/.claude-memex/memory.db
-```
-
-## v1.x からのアップデート
-
-v2.0 ではDBスキーマが変更されました（`text` カラム → `summary` + `body` カラム）。アップデート後は以下を実行してDBを再作成してください。
-
-```bash
-rm ~/.claude-memex/memory.db
-```
-
-次回のセッション終了時に新しいスキーマで自動作成されます。
-
-## 初回実行時の注意
-
-初回はRuri v3モデル（約1.2GB）のダウンロードが発生します。2回目以降はキャッシュされます。
