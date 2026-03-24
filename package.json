@@ -1,6 +1,6 @@
 {
   "name": "claude-memex",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "type": "module",
   "bin": {
     "claude-memex": "./dist/cli.js",
@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "hook": "node dist/hook-entry.js"
+    "hook": "node dist/hook-entry.js",
+    "viewer": "node dist/cli.js viewer"
   },
   "keywords": [
     "claude-code",
