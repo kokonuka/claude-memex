@@ -116,7 +116,7 @@ MCPツールを登録しただけでは、Claude Codeが自発的にclaude-memex
 保存されたデータを確認するコマンド:
 
 ```bash
-sqlite3 ~/.claude-memex/memory.db "SELECT id, substr(summary, 1, 80), timestamp FROM memories ORDER BY id DESC LIMIT 10;"
+sqlite3 -header -column ~/.claude-memex/memory.db "SELECT id, substr(summary, 1, 50) AS summary, substr(body, 1, 50) AS body, timestamp FROM memories ORDER BY id DESC LIMIT 10;"
 ```
 
 ## トラブルシューティング

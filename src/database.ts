@@ -28,6 +28,17 @@ export function getDatabase(): Database.Database {
     )
   `);
 
+  // v1スキーマ（textカラム）からの自動マイグレーション
+  const columns = db.pragma("table_info(memories)") as { name: string }[];
+  const hasText = columns.some((c) => c.name === "text");
+  const hasSummary = columns.some((c) => c.name === "summary");
+  if (hasText && !hasSummary) {
+    db.exec(`ALTER TABLE memories ADD COLUMN summary TEXT NOT NULL DEFAULT ''`);
+    db.exec(`ALTER TABLE memories ADD COLUMN body TEXT NOT NULL DEFAULT ''`);
+    db.exec(`UPDATE memories SET body = text WHERE body = ''`);
+    db.exec(`ALTER TABLE memories DROP COLUMN text`);
+  }
+
   // FTS5全文検索用テーブル（summary + body の両方を検索対象）
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(

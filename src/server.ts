@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { searchMemories } from "./searcher.js";
+import { writeErrorLog } from "./logger.js";
 
 const server = new McpServer({
   name: "claude-memex",
@@ -65,4 +66,7 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  writeErrorLog(err);
+  console.error(err);
+});

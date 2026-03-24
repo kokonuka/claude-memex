@@ -2,28 +2,13 @@ import { parseTranscript } from "./chunker.js";
 import { getDatabase } from "./database.js";
 import { embedTexts } from "./embedder.js";
 import { summarizeTexts } from "./summarizer.js";
+import { writeErrorLog } from "./logger.js";
 import { resolve } from "path";
-import { existsSync, appendFileSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
 import { config } from "dotenv";
 import { exec } from "child_process";
 import { homedir } from "os";
 import { join } from "path";
-
-const LOG_DIR = join(homedir(), ".claude-memex");
-const LOG_PATH = join(LOG_DIR, "error.log");
-
-function writeErrorLog(err: unknown): void {
-  try {
-    if (!existsSync(LOG_DIR)) {
-      mkdirSync(LOG_DIR, { recursive: true });
-    }
-    const timestamp = new Date().toISOString();
-    const message = err instanceof Error ? err.stack ?? err.message : String(err);
-    appendFileSync(LOG_PATH, `[${timestamp}] ${message}\n`, "utf-8");
-  } catch {
-    // ログ書き込み自体が失敗した場合は無視
-  }
-}
 
 function notify(message: string): void {
   if (process.platform === "darwin") {
