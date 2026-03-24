@@ -3,11 +3,27 @@ import { getDatabase } from "./database.js";
 import { embedTexts } from "./embedder.js";
 import { summarizeTexts } from "./summarizer.js";
 import { resolve } from "path";
-import { existsSync } from "fs";
+import { existsSync, appendFileSync, mkdirSync } from "fs";
 import { config } from "dotenv";
 import { exec } from "child_process";
 import { homedir } from "os";
 import { join } from "path";
+
+const LOG_DIR = join(homedir(), ".claude-memex");
+const LOG_PATH = join(LOG_DIR, "error.log");
+
+function writeErrorLog(err: unknown): void {
+  try {
+    if (!existsSync(LOG_DIR)) {
+      mkdirSync(LOG_DIR, { recursive: true });
+    }
+    const timestamp = new Date().toISOString();
+    const message = err instanceof Error ? err.stack ?? err.message : String(err);
+    appendFileSync(LOG_PATH, `[${timestamp}] ${message}\n`, "utf-8");
+  } catch {
+    // ログ書き込み自体が失敗した場合は無視
+  }
+}
 
 function notify(message: string): void {
   if (process.platform === "darwin") {
@@ -82,7 +98,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  notify("記憶の保存に失敗しました");
+  writeErrorLog(err);
+  notify("記憶の保存に失敗しました（~/.claude-memex/error.log を確認）");
   console.error("save-worker error:", err);
   process.exit(1);
 });

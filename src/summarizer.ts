@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = `あなたはテキストの要約を生成するアシス
 export async function summarizeText(text: string): Promise<string> {
   const ai = getClient();
   const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-lite",
+    model: "gemini-2.5-flash-lite",
     contents: text,
     config: {
       systemInstruction: SYSTEM_PROMPT,

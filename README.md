@@ -119,6 +119,20 @@ MCPツールを登録しただけでは、Claude Codeが自発的にclaude-memex
 sqlite3 ~/.claude-memex/memory.db "SELECT id, substr(summary, 1, 80), timestamp FROM memories ORDER BY id DESC LIMIT 10;"
 ```
 
+## トラブルシューティング
+
+記憶の保存に失敗した場合、エラーログが `~/.claude-memex/error.log` に記録されます。macOS通知で「保存に失敗しました」と表示されたときは、以下で確認できます。
+
+```bash
+cat ~/.claude-memex/error.log
+```
+
+直近のエラーだけ見たい場合:
+
+```bash
+tail -5 ~/.claude-memex/error.log
+```
+
 ## データのリセット
 
 記憶データをすべて削除してリセットするには、データベースファイルを削除します。次回のセッション終了時に自動で再作成されます。
