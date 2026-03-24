@@ -89,7 +89,7 @@ sqlite3 -header -column ~/.claude-memex/memory.db "SELECT id, substr(summary, 1,
 ## 仕組み
 
 ```
-セッション終了 → Hook発火 → JSONL読込 → チャンク分割 → Gemini APIで要約生成 → Ruri v3でベクトル化 → SQLite保存
+セッション終了 → Hook発火 → JSONL読込 → Gemini APIで要約生成 → Ruri v3でベクトル化 → SQLite保存
                                                                                                               ↓
 セッション開始 → Claude Codeが質問 → MCP経由で検索 → FTS5 + ベクトル + RRF → 関連記憶を返す
 ```
@@ -99,12 +99,12 @@ sqlite3 -header -column ~/.claude-memex/memory.db "SELECT id, substr(summary, 1,
 - **検索**: キーワード検索(FTS5) + ベクトル検索(sqlite-vec) + RRF統合 + 時間減衰(半減期30日)
 - **保存先**: `~/.claude-memex/memory.db`（1ファイル、プロジェクト横断検索可能）
 
-### チャンク構造
+### データ構造
 
-各記憶は **summary（要約）** と **body（本文）** の2つで構成されます。
+1セッション = 1レコードで保存されます。各レコードは **summary（要約）** と **body（本文）** の2つで構成されます。
 
-- **summary**: Gemini APIが生成した1〜2文の要約。ベクトル検索のアンカーとして機能
-- **body**: 会話の実テキスト。FTS5キーワード検索と結果表示用
+- **summary**: Gemini APIがセッション全体から抽出した要約（決定事項・技術的事実・結論など）。ベクトル検索のアンカーとして機能
+- **body**: セッション全体の会話テキスト。FTS5キーワード検索と結果表示用
 
 summaryだけをベクトル化することで、検索クエリとのマッチ精度を高めています。
 

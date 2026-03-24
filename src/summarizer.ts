@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 let client: GoogleGenAI | null = null;
 
@@ -14,60 +14,33 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-const SYSTEM_PROMPT = `あなたはテキストの要約を生成するアシスタントです。
-複数のテキストが「---CHUNK N---」で区切られて与えられます。
-それぞれのテキストを1〜2文で簡潔に要約してください。
-要約は、後からこの内容を検索するときに使うキーワードやフレーズを含めてください。
-入力と同じ数の要約を、同じ順序で配列として出力してください。
-要約は必ず日本語で出力してください。`;
+const SYSTEM_PROMPT = `あなたは会話ログから重要な情報を抽出するアシスタントです。
+1つのセッション（会話全体）が与えられます。
+会話に含まれる重要な情報を、話題ごとに箇条書きで漏れなく抽出してください。
+抽出する観点:
+- 決定事項（何をどうすることに決めたか）
+- 技術的な事実や制約（判明したこと、仕様、制限）
+- 結論や方針（議論の結果どうなったか）
+- ユーザーの好みやスタイル（指示の傾向、フィードバック）
+- 試行錯誤の過程（何を試して何がダメだったか、最終的にどうしたか）
+- 使用したツール・サービス・ライブラリ名
+注意:
+- すべての話題を箇条書きに含めること。漏れがないことが最も重要
+- 会話の流れ（「ユーザーが質問し、アシスタントが回答した」）ではなく、内容そのものを書くこと
+- 検索時に役立つキーワードや固有名詞を含めること
+- 要約は必ず日本語で出力すること`;
 
-const BATCH_SIZE = 20;
-const RATE_LIMIT_WINDOW = 10; // 10リクエストごとに待機
-const RATE_LIMIT_WAIT_MS = 60_000; // 1分待機
-
-async function summarizeBatch(ai: GoogleGenAI, batch: string[]): Promise<string[]> {
-  const prompt = batch
-    .map((t, i) => `---CHUNK ${i + 1}---\n${t}`)
-    .join("\n\n");
+export async function summarizeText(text: string): Promise<string> {
+  const ai = getClient();
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-lite",
-    contents: prompt,
+    contents: text,
     config: {
       systemInstruction: SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-      responseJsonSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-      },
-      maxOutputTokens: batch.length * 200,
+      maxOutputTokens: 8192,
     },
   });
 
-  const parsed: string[] = JSON.parse(response.text ?? "[]");
-  return batch.map((t, i) => parsed[i] ?? "");
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function summarizeTexts(texts: string[]): Promise<string[]> {
-  if (texts.length === 0) return [];
-
-  const ai = getClient();
-  const results: string[] = [];
-  let requestCount = 0;
-
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    if (requestCount > 0 && requestCount % RATE_LIMIT_WINDOW === 0) {
-      await sleep(RATE_LIMIT_WAIT_MS);
-    }
-    const batch = texts.slice(i, i + BATCH_SIZE);
-    const summaries = await summarizeBatch(ai, batch);
-    results.push(...summaries);
-    requestCount++;
-  }
-
-  return results;
+  return response.text ?? "";
 }

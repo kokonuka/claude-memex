@@ -1,7 +1,7 @@
 import { parseTranscript } from "./chunker.js";
 import { getDatabase } from "./database.js";
 import { embedTexts } from "./embedder.js";
-import { summarizeTexts } from "./summarizer.js";
+import { summarizeText } from "./summarizer.js";
 import { writeErrorLog } from "./logger.js";
 import { resolve } from "path";
 import { existsSync } from "fs";
@@ -38,18 +38,18 @@ async function main() {
   }
   const companyName = process.env.COMPANY_NAME || "";
 
-  // 1. チャンク分割
+  // 1. セッション全体を1レコードとしてパース
   const chunks = parseTranscript(transcriptPath);
   if (chunks.length === 0) {
     process.exit(0);
   }
+  const record = chunks[0];
 
   // 2. 要約生成（Gemini API）
-  const bodies = chunks.map((c) => c.body);
-  const summaries = await summarizeTexts(bodies);
+  const summary = await summarizeText(record.body);
 
   // 3. ベクトル化（summaryのみ）
-  const vectors = await embedTexts(summaries);
+  const vectors = await embedTexts([summary]);
 
   // 4. DB保存（memoriesテーブル + memories_vecテーブル）
   const db = getDatabase();
@@ -62,24 +62,19 @@ async function main() {
     VALUES (?, ?)
   `);
 
-  const insertAll = db.transaction(() => {
-    for (let i = 0; i < chunks.length; i++) {
-      const result = insertMemory.run(
-        summaries[i],
-        chunks[i].body,
-        companyName,
-        chunks[i].projectPath,
-        chunks[i].sessionId,
-        chunks[i].timestamp
-      );
-      insertVec.run(BigInt(result.lastInsertRowid), vectors[i]);
-    }
-  });
+  const result = insertMemory.run(
+    summary,
+    record.body,
+    companyName,
+    record.projectPath,
+    record.sessionId,
+    record.timestamp
+  );
+  insertVec.run(BigInt(result.lastInsertRowid), vectors[0]);
 
-  insertAll();
   db.close();
 
-  notify(`${chunks.length}件の記憶を保存しました`);
+  notify("セッションの記憶を保存しました");
 }
 
 main().catch((err) => {
