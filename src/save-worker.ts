@@ -31,12 +31,13 @@ async function main() {
     config({ path: globalEnvPath });
   }
 
-  // プロジェクトの.envからCOMPANY_NAMEを読み取る
+  // プロジェクトの.envからCOMPANY_NAME, PROJECT_NAMEを読み取る
   const envPath = resolve(cwd, ".env");
   if (existsSync(envPath)) {
     config({ path: envPath });
   }
   const companyName = process.env.COMPANY_NAME || "";
+  const projectName = process.env.PROJECT_NAME || cwd.split("/").pop() || "";
 
   // 1. セッション全体を1レコードとしてパース
   const chunks = parseTranscript(transcriptPath);
@@ -54,7 +55,7 @@ async function main() {
   // 4. DB保存（memoriesテーブル + memories_vecテーブル）
   const db = getDatabase();
   const insertMemory = db.prepare(`
-    INSERT INTO memories (summary, body, company_name, project_path, session_id, timestamp)
+    INSERT INTO memories (summary, body, company_name, project_name, session_id, timestamp)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   const insertVec = db.prepare(`
@@ -66,7 +67,7 @@ async function main() {
     summary,
     record.body,
     companyName,
-    record.projectPath,
+    projectName,
     record.sessionId,
     record.timestamp
   );

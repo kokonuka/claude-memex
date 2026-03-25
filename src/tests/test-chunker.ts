@@ -17,7 +17,7 @@ console.log(`Found ${chunks.length} chunks\n`);
 
 for (const chunk of chunks.slice(0, 3)) {
   console.log(`--- Session: ${chunk.sessionId} ---`);
-  console.log(`Project: ${chunk.projectPath}`);
+  console.log(`Project: ${chunk.projectName}`);
   console.log(`Time: ${chunk.timestamp}`);
   console.log(chunk.body.substring(0, 200));
   console.log();

@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 export interface Chunk {
   body: string;
   sessionId: string;
-  projectPath: string;
+  projectName: string;
   timestamp: string;
 }
 
@@ -42,7 +42,7 @@ export function parseTranscript(transcriptPath: string): Chunk[] {
   let currentUserMessage: string | null = null;
   let assistantParts: string[] = [];
   let sessionId = "";
-  let projectPath = "";
+  let projectName = "";
   let lastTimestamp = "";
 
   function flushTurn() {
@@ -66,7 +66,7 @@ export function parseTranscript(transcriptPath: string): Chunk[] {
     }
 
     if (entry.sessionId) sessionId = entry.sessionId;
-    if (entry.cwd) projectPath = entry.cwd;
+    if (entry.cwd) projectName = entry.cwd.split("/").pop() || entry.cwd;
     if (entry.timestamp) lastTimestamp = entry.timestamp;
 
     if (entry.type === "user" && entry.message?.role === "user") {
@@ -99,5 +99,5 @@ export function parseTranscript(transcriptPath: string): Chunk[] {
   const body = turns.map((t) => t.body).join("\n\n");
   const timestamp = turns[turns.length - 1].timestamp;
 
-  return [{ body, sessionId, projectPath, timestamp }];
+  return [{ body, sessionId, projectName, timestamp }];
 }

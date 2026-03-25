@@ -6,7 +6,7 @@ interface SearchResult {
   summary: string;
   body: string;
   companyName: string;
-  projectPath: string;
+  projectName: string;
   sessionId: string;
   timestamp: string;
   score: number;
@@ -41,7 +41,7 @@ function applyTimeDecay(score: number, timestamp: string): number {
 
 export async function searchMemories(
   query: string,
-  options?: { projectPath?: string; companyName?: string; limit?: number }
+  options?: { projectName?: string; companyName?: string; limit?: number }
 ): Promise<SearchResult[]> {
   const limit = options?.limit ?? 10;
   const db = getDatabase();
@@ -86,7 +86,7 @@ export async function searchMemories(
   const placeholders = allIds.map(() => "?").join(",");
   const rows = db
     .prepare(
-      `SELECT id, summary, body, company_name, project_path, session_id, timestamp
+      `SELECT id, summary, body, company_name, project_name, session_id, timestamp
        FROM memories WHERE id IN (${placeholders})`
     )
     .all(...allIds) as Array<{
@@ -94,7 +94,7 @@ export async function searchMemories(
     summary: string;
     body: string;
     company_name: string;
-    project_path: string;
+    project_name: string;
     session_id: string;
     timestamp: string;
   }>;
@@ -106,13 +106,13 @@ export async function searchMemories(
       summary: row.summary,
       body: row.body,
       companyName: row.company_name,
-      projectPath: row.project_path,
+      projectName: row.project_name,
       sessionId: row.session_id,
       timestamp: row.timestamp,
       score: applyTimeDecay(rrfScores.get(row.id) ?? 0, row.timestamp),
     }))
     .filter((r) => {
-      if (options?.projectPath && r.projectPath !== options.projectPath)
+      if (options?.projectName && r.projectName !== options.projectName)
         return false;
       if (options?.companyName && r.companyName !== options.companyName)
         return false;

@@ -20,10 +20,10 @@ server.tool(
 - 「前に話した」「以前の」「前回の」などの表現が含まれる場合`,
   {
     query: z.string().describe("検索クエリ"),
-    project_path: z
+    project_name: z
       .string()
       .optional()
-      .describe("特定プロジェクトに絞る場合のパス"),
+      .describe("特定プロジェクトに絞る場合のプロジェクト名"),
     company_name: z
       .string()
       .optional()
@@ -34,9 +34,9 @@ server.tool(
       .default(10)
       .describe("返す結果の最大件数"),
   },
-  async ({ query, project_path, company_name, limit }) => {
+  async ({ query, project_name, company_name, limit }) => {
     const results = await searchMemories(query, {
-      projectPath: project_path,
+      projectName: project_name,
       companyName: company_name,
       limit,
     });
@@ -50,7 +50,7 @@ server.tool(
     const text = results
       .map(
         (r, i) =>
-          `[${i + 1}] (score: ${r.score.toFixed(4)}, ${r.timestamp})\nProject: ${r.projectPath}\nCompany: ${r.companyName}\n概要: ${r.summary}\n本文: ${r.body}`
+          `[${i + 1}] (score: ${r.score.toFixed(4)}, ${r.timestamp})\nProject: ${r.projectName}\nCompany: ${r.companyName}\n概要: ${r.summary}\n本文: ${r.body}`
       )
       .join("\n\n---\n\n");
 

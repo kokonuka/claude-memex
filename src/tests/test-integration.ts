@@ -45,7 +45,7 @@ async function main() {
   // 3. DB保存テスト
   console.log("\n[3] DB保存テスト...");
   const insertMemory = db.prepare(`
-    INSERT INTO memories (summary, body, company_name, project_path, session_id, timestamp)
+    INSERT INTO memories (summary, body, company_name, project_name, session_id, timestamp)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   const insertVec = db.prepare(`
