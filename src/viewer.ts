@@ -607,11 +607,20 @@ function renderHome(): string {
 
 function renderTableView(table: string, page: number, perPage: number, sortCol?: string, sortOrder?: "ASC" | "DESC"): string {
   const rawColumns = getColumns(table);
-  const tsIdx = rawColumns.findIndex((c) => c.name === "timestamp");
-  const sidIdx = rawColumns.findIndex((c) => c.name === "session_id");
-  if (tsIdx > sidIdx && sidIdx >= 0) {
-    const [ts] = rawColumns.splice(tsIdx, 1);
-    rawColumns.splice(sidIdx, 0, ts);
+  // Reorder: project_name, company_name, timestamp を連続してこの順に配置
+  const desiredOrder = ["project_name", "company_name", "timestamp"];
+  const indices = desiredOrder
+    .map((name) => rawColumns.findIndex((c) => c.name === name))
+    .filter((i) => i >= 0);
+  if (indices.length > 1) {
+    const insertAt = Math.min(...indices);
+    const extracted = desiredOrder
+      .map((name) => rawColumns.find((c) => c.name === name))
+      .filter((c): c is (typeof rawColumns)[number] => c != null);
+    const rest = rawColumns.filter((c) => !desiredOrder.includes(c.name));
+    rest.splice(insertAt, 0, ...extracted);
+    rawColumns.length = 0;
+    rawColumns.push(...rest);
   }
   const columns = rawColumns;
   const colNames = columns.map((c) => c.name);
