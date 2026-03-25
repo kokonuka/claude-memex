@@ -4,6 +4,20 @@ import { getDatabase } from "./database.js";
 const db = getDatabase();
 const PORT = parseInt(process.env.PORT || "8642", 10);
 
+const TABLE_DESCRIPTIONS: Record<string, string> = {
+  memories: "Claude Codeセッションの要約・本文を保存するメインテーブル",
+  memories_fts: "memoriesテーブルのFTS5全文検索インデックス",
+  memories_fts_config: "FTS5の設定情報",
+  memories_fts_data: "FTS5の内部データ（トークン情報）",
+  memories_fts_docsize: "FTS5の文書サイズ情報",
+  memories_fts_idx: "FTS5のセグメントインデックス",
+  memories_vec: "memoriesのベクトル埋め込み（コサイン類似度検索用）",
+  memories_vec_chunks: "ベクトルデータのチャンク管理",
+  memories_vec_info: "ベクトルテーブルのメタ情報",
+  memories_vec_rowids: "ベクトルとmemoriesの行ID対応表",
+  memories_vec_vector_chunks00: "ベクトルデータの実体（バイナリ）",
+};
+
 interface TableInfo {
   name: string;
 }
@@ -33,14 +47,21 @@ function getColumns(table: string): ColumnInfo[] {
 function getRows(
   table: string,
   limit: number,
-  offset: number
+  offset: number,
+  sortCol?: string,
+  sortOrder?: "ASC" | "DESC"
 ): { rows: Record<string, unknown>[]; total: number } {
   const countRow = db
     .prepare(`SELECT COUNT(*) as cnt FROM "${table}"`)
     .get() as { cnt: number };
   const total = countRow.cnt;
+  let sql = `SELECT * FROM "${table}"`;
+  if (sortCol) {
+    sql += ` ORDER BY "${sortCol}" ${sortOrder === "ASC" ? "ASC" : "DESC"}`;
+  }
+  sql += ` LIMIT ? OFFSET ?`;
   const rows = db
-    .prepare(`SELECT * FROM "${table}" LIMIT ? OFFSET ?`)
+    .prepare(sql)
     .all(limit, offset) as Record<string, unknown>[];
   return { rows, total };
 }
@@ -54,12 +75,25 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function formatVal(val: unknown): { display: string; full: string } {
+function formatVal(val: unknown, colName?: string): { display: string; full: string } {
   if (val === null || val === undefined)
     return { display: '<span class="null">NULL</span>', full: "" };
   if (val instanceof Buffer || val instanceof Uint8Array)
     return { display: `<span class="blob">[BLOB ${val.length} bytes]</span>`, full: "" };
   const s = String(val);
+  if (colName && /timestamp|created_at|updated_at/i.test(colName) && /^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+      const formatted = jst.getUTCFullYear() + "/" +
+        String(jst.getUTCMonth() + 1).padStart(2, "0") + "/" +
+        String(jst.getUTCDate()).padStart(2, "0") + " " +
+        String(jst.getUTCHours()).padStart(2, "0") + ":" +
+        String(jst.getUTCMinutes()).padStart(2, "0") + ":" +
+        String(jst.getUTCSeconds()).padStart(2, "0");
+      return { display: escapeHtml(formatted), full: "" };
+    }
+  }
   if (s.length > 150) {
     return {
       display: escapeHtml(s.slice(0, 150)) + '<span class="ellipsis">...</span>',
@@ -128,7 +162,20 @@ const CSS = `
     border-right: 1px solid var(--border-subtle);
     padding: 20px 0; overflow-y: auto;
     display: flex; flex-direction: column;
+    transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
   }
+  .sidebar.collapsed {
+    width: 0; min-width: 0; padding: 0; overflow: hidden;
+    border-right: none;
+  }
+  .sidebar-toggle {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); width: 28px; height: 28px;
+    border-radius: 6px; cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .sidebar-toggle:hover { color: var(--text); border-color: var(--text-dim); }
   .sidebar .section-label {
     font-family: 'DM Mono', monospace;
     font-size: 9px; text-transform: uppercase; color: var(--text-dim);
@@ -184,9 +231,13 @@ const CSS = `
     font-family: 'DM Mono', monospace;
     font-size: 12px; color: var(--text-dim);
   }
+  .table-desc {
+    font-size: 13px; color: var(--text-dim); margin-bottom: 16px;
+    padding-left: 2px;
+  }
   .table-wrap {
     border: 1px solid var(--border-subtle); border-radius: 10px;
-    overflow: hidden; background: var(--surface);
+    overflow-x: auto; overflow-y: hidden; background: var(--surface);
   }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead { position: sticky; top: 0; z-index: 10; }
@@ -200,6 +251,15 @@ const CSS = `
     border-bottom: 1px solid var(--border);
     position: relative; user-select: none;
   }
+  th { white-space: nowrap; }
+  th.sortable a {
+    color: inherit; text-decoration: none;
+    display: inline; align-items: center; gap: 4px;
+  }
+  th.sortable a:hover { color: var(--text-bright); }
+  th.sorted { color: var(--accent); }
+  th.sorted a { color: var(--accent); }
+  .sort-arrow { font-size: 9px; opacity: 0.8; }
   th .col-type {
     color: var(--text-dim); font-weight: 400;
     text-transform: lowercase; letter-spacing: 0;
@@ -316,6 +376,19 @@ const CSS = `
     font-size: 12px; color: var(--teal);
     text-transform: uppercase; letter-spacing: 0.8px;
   }
+  .modal-header-actions {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .modal-copy {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-dim); height: 28px;
+    padding: 0 10px; border-radius: 6px; cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    display: flex; align-items: center; gap: 5px;
+    transition: all 0.15s;
+  }
+  .modal-copy:hover { color: var(--text); border-color: var(--text-dim); }
+  .modal-copy.copied { color: var(--teal); border-color: var(--teal); }
   .modal-close {
     background: none; border: 1px solid var(--border);
     color: var(--text-dim); width: 28px; height: 28px;
@@ -383,6 +456,21 @@ document.querySelectorAll('td[data-full]').forEach(function(td) {
   });
 });
 
+var modalCopy = document.getElementById('modal-copy');
+if (modalCopy) {
+  modalCopy.addEventListener('click', function() {
+    var text = modalBody.textContent || '';
+    navigator.clipboard.writeText(text).then(function() {
+      modalCopy.textContent = 'Copied!';
+      modalCopy.classList.add('copied');
+      setTimeout(function() {
+        modalCopy.textContent = 'Copy';
+        modalCopy.classList.remove('copied');
+      }, 1500);
+    });
+  });
+}
+
 if (modalClose) {
   modalClose.addEventListener('click', function() { modal.classList.remove('open'); });
 }
@@ -394,6 +482,14 @@ if (modal) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && modal) modal.classList.remove('open');
 });
+
+var sidebarToggle = document.getElementById('sidebar-toggle');
+var sidebar = document.getElementById('sidebar');
+if (sidebarToggle && sidebar) {
+  sidebarToggle.addEventListener('click', function() {
+    sidebar.classList.toggle('collapsed');
+  });
+}
 
 var textarea = document.querySelector('.sql-section textarea');
 if (textarea) {
@@ -417,6 +513,7 @@ function renderPage(body: string, title = "claude-memex viewer"): string {
     "<style>" + CSS + "</style>" +
     "</head><body>" +
     '<div class="header">' +
+    '  <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">&#9776;</button>' +
     '  <div class="logo">claude<span>.</span>memex</div>' +
     '  <div class="badge">viewer</div>' +
     '  <div class="spacer"></div>' +
@@ -429,7 +526,10 @@ function renderPage(body: string, title = "claude-memex viewer"): string {
     '  <div class="modal">' +
     '    <div class="modal-header">' +
     '      <span class="col-name" id="modal-col"></span>' +
-    '      <button class="modal-close" id="modal-close">&times;</button>' +
+    '      <div class="modal-header-actions">' +
+    '        <button class="modal-copy" id="modal-copy">Copy</button>' +
+    '        <button class="modal-close" id="modal-close">&times;</button>' +
+    '      </div>' +
     "    </div>" +
     '    <div class="modal-body" id="modal-body"></div>' +
     "  </div>" +
@@ -452,7 +552,7 @@ function renderSidebar(activeTable?: string): string {
   }
 
   let html =
-    '<div class="sidebar">' +
+    '<div class="sidebar collapsed" id="sidebar">' +
     '<div class="section-label">Navigation</div>' +
     '<a href="/" ' + (!activeTable ? 'class="active"' : "") + '><span class="icon">&gt;_</span>Query</a>' +
     '<div class="section-label" style="margin-top:20px">Tables</div>';
@@ -505,11 +605,34 @@ function renderHome(): string {
   return renderPage(body);
 }
 
-function renderTableView(table: string, page: number, perPage: number): string {
-  const columns = getColumns(table);
+function renderTableView(table: string, page: number, perPage: number, sortCol?: string, sortOrder?: "ASC" | "DESC"): string {
+  const rawColumns = getColumns(table);
+  const tsIdx = rawColumns.findIndex((c) => c.name === "timestamp");
+  const sidIdx = rawColumns.findIndex((c) => c.name === "session_id");
+  if (tsIdx > sidIdx && sidIdx >= 0) {
+    const [ts] = rawColumns.splice(tsIdx, 1);
+    rawColumns.splice(sidIdx, 0, ts);
+  }
+  const columns = rawColumns;
+  const colNames = columns.map((c) => c.name);
+  if (!sortCol) {
+    if (colNames.includes("timestamp")) {
+      sortCol = "timestamp";
+      sortOrder = "DESC";
+    } else if (colNames.includes("created_at")) {
+      sortCol = "created_at";
+      sortOrder = "DESC";
+    }
+  }
   const offset = (page - 1) * perPage;
-  const { rows, total } = getRows(table, perPage, offset);
+  const { rows, total } = getRows(table, perPage, offset, sortCol, sortOrder);
   const totalPages = Math.ceil(total / perPage);
+
+  const buildHref = (p: number, sc?: string, so?: string) => {
+    let href = "/table/" + encodeURIComponent(table) + "?page=" + p;
+    if (sc) href += "&sort=" + encodeURIComponent(sc) + "&order=" + (so || "ASC");
+    return href;
+  };
 
   let body = renderSidebar(table);
   body += '<div class="main">';
@@ -517,18 +640,26 @@ function renderTableView(table: string, page: number, perPage: number): string {
     '<div class="table-header">' +
     "<h2>" + escapeHtml(table) + "</h2>" +
     '<span class="row-count">' + total + " rows</span>" +
-    "</div>";
+    "</div>" +
+    (TABLE_DESCRIPTIONS[table] ? '<div class="table-desc">' + escapeHtml(TABLE_DESCRIPTIONS[table]) + "</div>" : "");
   body += '<div class="table-wrap"><table><thead><tr>';
   for (const col of columns) {
+    const isActive = sortCol === col.name;
+    const nextOrder = isActive && sortOrder === "ASC" ? "DESC" : isActive && sortOrder === "DESC" ? "ASC" : "ASC";
+    const arrow = isActive ? (sortOrder === "ASC" ? " &#9650;" : " &#9660;") : "";
+    const href = buildHref(1, col.name, nextOrder);
     body +=
-      "<th>" + escapeHtml(col.name) +
+      '<th class="sortable' + (isActive ? " sorted" : "") + '">' +
+      '<a href="' + href + '">' + escapeHtml(col.name) +
+      '<span class="sort-arrow">' + arrow + "</span>" +
+      "</a>" +
       '<span class="col-type">' + escapeHtml(col.type) + "</span></th>";
   }
   body += "</tr></thead><tbody>";
   for (const row of rows) {
     body += "<tr>";
     for (const col of columns) {
-      const { display, full } = formatVal(row[col.name]);
+      const { display, full } = formatVal(row[col.name], col.name);
       if (full) {
         body += '<td data-full="' + escapeHtml(full) + '" data-col="' + escapeHtml(col.name) + '">' + display + "</td>";
       } else {
@@ -542,10 +673,10 @@ function renderTableView(table: string, page: number, perPage: number): string {
   if (totalPages > 1) {
     body += '<div class="pagination">';
     if (page > 1)
-      body += '<a href="/table/' + encodeURIComponent(table) + "?page=" + (page - 1) + '">&larr; Prev</a>';
+      body += '<a href="' + buildHref(page - 1, sortCol, sortOrder) + '">&larr; Prev</a>';
     body += "<span>Page " + page + " / " + totalPages + "</span>";
     if (page < totalPages)
-      body += '<a href="/table/' + encodeURIComponent(table) + "?page=" + (page + 1) + '">Next &rarr;</a>';
+      body += '<a href="' + buildHref(page + 1, sortCol, sortOrder) + '">Next &rarr;</a>';
     body += "</div>";
   }
   body += "</div>";
@@ -620,8 +751,10 @@ const server = createServer((req, res) => {
   } else if (pathname.startsWith("/table/")) {
     const table = decodeURIComponent(pathname.slice(7));
     const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const sortCol = url.searchParams.get("sort") || undefined;
+    const sortOrder = (url.searchParams.get("order") === "ASC" ? "ASC" : url.searchParams.get("order") === "DESC" ? "DESC" : undefined) as "ASC" | "DESC" | undefined;
     try {
-      res.end(renderTableView(table, page, 50));
+      res.end(renderTableView(table, page, 50, sortCol, sortOrder));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       let errBody = renderSidebar();
