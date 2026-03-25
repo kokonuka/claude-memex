@@ -24,7 +24,8 @@ export function getDatabase(): Database.Database {
       company_name TEXT DEFAULT '',
       project_name TEXT DEFAULT '',
       session_id TEXT DEFAULT '',
-      timestamp TEXT DEFAULT ''
+      timestamp TEXT DEFAULT '',
+      source TEXT DEFAULT 'claude-session'
     )
   `);
 
@@ -46,6 +47,12 @@ export function getDatabase(): Database.Database {
     db.exec(`ALTER TABLE memories ADD COLUMN project_name TEXT DEFAULT ''`);
     db.exec(`UPDATE memories SET project_name = REPLACE(REPLACE(project_path, RTRIM(project_path, REPLACE(project_path, '/', '')), ''), '/', '') WHERE project_name = '' AND project_path != ''`);
     db.exec(`ALTER TABLE memories DROP COLUMN project_path`);
+  }
+
+  // v3スキーマ: sourceカラムの追加（データの出所を区別）
+  const hasSource = columns.some((c) => c.name === "source");
+  if (!hasSource) {
+    db.exec(`ALTER TABLE memories ADD COLUMN source TEXT DEFAULT 'claude-session'`);
   }
 
   // FTS5全文検索用テーブル（summary + body の両方を検索対象）

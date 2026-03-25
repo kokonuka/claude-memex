@@ -608,7 +608,7 @@ function renderHome(): string {
 function renderTableView(table: string, page: number, perPage: number, sortCol?: string, sortOrder?: "ASC" | "DESC"): string {
   const rawColumns = getColumns(table);
   // Reorder: project_name, company_name, timestamp を連続してこの順に配置
-  const desiredOrder = ["project_name", "company_name", "timestamp"];
+  const desiredOrder = ["project_name", "company_name", "source", "timestamp"];
   const indices = desiredOrder
     .map((name) => rawColumns.findIndex((c) => c.name === name))
     .filter((i) => i >= 0);

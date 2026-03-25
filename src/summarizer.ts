@@ -30,6 +30,55 @@ const SYSTEM_PROMPT = `あなたは会話ログから重要な情報を抽出す
 - 検索時に役立つキーワードや固有名詞を含めること
 - 要約は必ず日本語で出力すること`;
 
+const CHUNK_SPLIT_PROMPT = `あなたはテキストを意味のまとまりごとに分割するアシスタントです。
+与えられたテキストを、意味的に独立したチャンクに分割してください。
+
+ルール:
+- 各チャンクは1つの話題やトピックを含む意味のまとまりにすること
+- 各チャンクは800トークン以下を目安にすること
+- チャンク間で内容が重複しないこと
+- 分割結果はJSON配列として出力すること（各要素は分割されたテキスト文字列）
+- JSON以外の文字を含めないこと
+
+出力形式:
+["チャンク1のテキスト", "チャンク2のテキスト", ...]`;
+
+export async function splitIntoChunks(text: string): Promise<string[]> {
+  // 短いテキストはそのまま返す
+  if (text.length <= 1600) {
+    return [text];
+  }
+
+  const ai = getClient();
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents: text,
+    config: {
+      systemInstruction: CHUNK_SPLIT_PROMPT,
+      maxOutputTokens: 8192,
+    },
+  });
+
+  const responseText = response.text ?? "";
+  try {
+    const chunks = JSON.parse(responseText) as string[];
+    // 上限を超えたチャンクは再帰的に分割
+    const result: string[] = [];
+    for (const chunk of chunks) {
+      if (chunk.length > 1600) {
+        const subChunks = await splitIntoChunks(chunk);
+        result.push(...subChunks);
+      } else {
+        result.push(chunk);
+      }
+    }
+    return result;
+  } catch {
+    // パース失敗時は元テキストをそのまま返す
+    return [text];
+  }
+}
+
 export async function summarizeText(text: string): Promise<string> {
   const ai = getClient();
 

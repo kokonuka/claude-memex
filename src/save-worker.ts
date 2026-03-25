@@ -55,8 +55,8 @@ async function main() {
   // 4. DB保存（memoriesテーブル + memories_vecテーブル）
   const db = getDatabase();
   const insertMemory = db.prepare(`
-    INSERT INTO memories (summary, body, company_name, project_name, session_id, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO memories (summary, body, company_name, project_name, session_id, timestamp, source)
+    VALUES (?, ?, ?, ?, ?, ?, 'claude-session')
   `);
   const insertVec = db.prepare(`
     INSERT INTO memories_vec (memory_id, embedding)

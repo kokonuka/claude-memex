@@ -9,6 +9,7 @@ interface SearchResult {
   projectName: string;
   sessionId: string;
   timestamp: string;
+  source: string;
   score: number;
 }
 
@@ -30,18 +31,25 @@ function reciprocalRankFusion(
   return scores;
 }
 
-// 時間減衰: 半減期30日
+// 時間減衰: 半減期180日
 function applyTimeDecay(score: number, timestamp: string): number {
   const ageMs = Date.now() - new Date(timestamp).getTime();
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  const halfLife = 30;
+  const halfLife = 180;
   const decay = Math.pow(0.5, ageDays / halfLife);
   return score * decay;
 }
 
 export async function searchMemories(
   query: string,
-  options?: { projectName?: string; companyName?: string; limit?: number }
+  options?: {
+    projectName?: string;
+    companyName?: string;
+    source?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+  }
 ): Promise<SearchResult[]> {
   const limit = options?.limit ?? 10;
   const db = getDatabase();
@@ -86,7 +94,7 @@ export async function searchMemories(
   const placeholders = allIds.map(() => "?").join(",");
   const rows = db
     .prepare(
-      `SELECT id, summary, body, company_name, project_name, session_id, timestamp
+      `SELECT id, summary, body, company_name, project_name, session_id, timestamp, source
        FROM memories WHERE id IN (${placeholders})`
     )
     .all(...allIds) as Array<{
@@ -97,6 +105,7 @@ export async function searchMemories(
     project_name: string;
     session_id: string;
     timestamp: string;
+    source: string;
   }>;
 
   // 5. 時間減衰を適用してスコア最終化
@@ -109,12 +118,19 @@ export async function searchMemories(
       projectName: row.project_name,
       sessionId: row.session_id,
       timestamp: row.timestamp,
+      source: row.source ?? "claude-session",
       score: applyTimeDecay(rrfScores.get(row.id) ?? 0, row.timestamp),
     }))
     .filter((r) => {
       if (options?.projectName && r.projectName !== options.projectName)
         return false;
       if (options?.companyName && r.companyName !== options.companyName)
+        return false;
+      if (options?.source && r.source !== options.source)
+        return false;
+      if (options?.dateFrom && r.timestamp < options.dateFrom)
+        return false;
+      if (options?.dateTo && r.timestamp > options.dateTo)
         return false;
       return true;
     })
