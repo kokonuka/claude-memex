@@ -1,6 +1,6 @@
 {
   "name": "claude-memex",
-  "version": "2.5.1",
+  "version": "2.5.3",
   "type": "module",
   "bin": {
     "claude-memex": "./dist/cli.js",
