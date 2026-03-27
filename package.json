@@ -1,6 +1,6 @@
 {
   "name": "claude-memex",
-  "version": "2.5.4",
+  "version": "2.5.5",
   "type": "module",
   "bin": {
     "claude-memex": "./dist/cli.js",
@@ -23,6 +23,11 @@
     "memory",
     "long-term-memory"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kokonuka/claude-memex.git"
+  },
+  "homepage": "https://github.com/kokonuka/claude-memex",
   "author": "kokonuka",
   "license": "ISC",
   "description": "Long-term memory for Claude Code via MCP",

@@ -1,5 +1,16 @@
 # claude-memex
 
+[![npm version](https://img.shields.io/npm/v/claude-memex.svg)](https://www.npmjs.com/package/claude-memex)
+[![GitHub stars](https://img.shields.io/github/stars/kokonuka/claude-memex.svg?style=social)](https://github.com/kokonuka/claude-memex)
+
+Long-term memory for Claude Code via MCP.
+Automatically saves session conversations and enables semantic search across past sessions.
+Also supports ingesting external data (meeting notes, Slack logs, emails, etc).
+
+> **GitHub**: https://github.com/kokonuka/claude-memex — Star us if you find it useful!
+
+---
+
 Claude Code用の長期記憶ツール。セッション終了時に会話を自動保存し、過去の記憶をMCP経由で検索できる。外部データ（会議録、Slackログ、メール等）の取り込みにも対応。
 
 ## セットアップ
